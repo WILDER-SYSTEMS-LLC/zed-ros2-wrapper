@@ -1,4 +1,4 @@
-ARG L4T_VERSION=l4t-r35.4.1
+ARG L4T_VERSION=l4t-r36.2.0
 ARG IMAGE_NAME=dustynv/ros:humble-ros-base-${L4T_VERSION}
 
 FROM ${IMAGE_NAME}
@@ -13,13 +13,6 @@ ARG L4T_MINOR=1
 
 ARG ROS2_DIST=humble       # ROS2 distribution
 
-# ZED ROS2 Wrapper dependencies version
-ARG XACRO_VERSION=2.0.8
-ARG DIAGNOSTICS_VERSION=3.0.0
-ARG AMENT_LINT_VERSION=0.12.4
-ARG GEOGRAPHIC_INFO_VERSION=1.0.4
-ARG ROBOT_LOCALIZATION_VERSION=3.4.2
-
 ENV DEBIAN_FRONTEND noninteractive
 
 # ZED SDK link
@@ -33,11 +26,7 @@ RUN if [ "$(curl -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | head 
         exit 1; \
     fi
 
-# Disable apt-get warnings
-RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 42D5A192B819C5DA || true && \
-  apt-get update || true && apt-get install -y --no-install-recommends apt-utils dialog && \
-  rm -rf /var/lib/apt/lists/*
-
+RUN apt-get update && apt-get install -y --no-install-recommends apt-utils dialog && rm -rf /var/lib/apt/lists/*
 ENV TZ=Europe/Paris
 
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \ 
@@ -64,25 +53,20 @@ ENV ROS_DISTRO ${ROS2_DIST}
 WORKDIR /root/ros2_ws/src
 COPY tmp_sources/ ./
 
-# Install missing dependencies
-WORKDIR /root/ros2_ws/src
-RUN wget https://github.com/ros/xacro/archive/refs/tags/${XACRO_VERSION}.tar.gz -O - | tar -xvz && mv xacro-${XACRO_VERSION} xacro && \
-  wget https://github.com/ros/diagnostics/archive/refs/tags/${DIAGNOSTICS_VERSION}.tar.gz -O - | tar -xvz && mv diagnostics-${DIAGNOSTICS_VERSION} diagnostics && \
-  wget https://github.com/ament/ament_lint/archive/refs/tags/${AMENT_LINT_VERSION}.tar.gz -O - | tar -xvz && mv ament_lint-${AMENT_LINT_VERSION} ament-lint && \
-  wget https://github.com/cra-ros-pkg/robot_localization/archive/refs/tags/${ROBOT_LOCALIZATION_VERSION}.tar.gz -O - | tar -xvz && mv robot_localization-${ROBOT_LOCALIZATION_VERSION} robot-localization && \
-  wget https://github.com/ros-geographic-info/geographic_info/archive/refs/tags/${GEOGRAPHIC_INFO_VERSION}.tar.gz -O - | tar -xvz && mv geographic_info-${GEOGRAPHIC_INFO_VERSION} geographic-info && \
-  cp -r geographic-info/geographic_msgs/ . && \
-  rm -rf geographic-info && \
-  git clone https://github.com/ros-drivers/nmea_msgs.git --branch ros2 && \
-  git clone https://github.com/ros/angles.git --branch humble-devel && \
-  git clone https://github.com/ros2/rcpputils.git --branch humble && \
-  git clone https://github.com/ros-perception/point_cloud_transport.git --branch humble
-
-# Check that all the dependencies are satisfied
 WORKDIR /root/ros2_ws
-RUN apt-get update -y || true && rosdep update && \
+
+RUN apt-get update -y && rosdep update
+
+# TODO this may cause serious issues. overwrite the opencv-dev package, which
+# is labeled as dirty, and comes from who knows where ... ?
+RUN apt-get -o Dpkg::Options::="--force-overwrite" install -f -y libopencv-dev
+
+RUN apt-get update -y && rosdep update && \
   rosdep install --from-paths src --ignore-src -r -y && \
   rm -rf /var/lib/apt/lists/*
+
+# Add missing packages which weren't resolved by rosdep
+RUN apt-get install -y ros-humble-nmea-msgs
 
 # Install cython
 RUN python3 -m pip install --upgrade cython
@@ -107,4 +91,3 @@ RUN sudo chmod 755 /sbin/ros_entrypoint.sh
 
 ENTRYPOINT ["/sbin/ros_entrypoint.sh"]
 CMD ["bash"]
-
