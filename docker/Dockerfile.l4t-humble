@@ -81,7 +81,7 @@ RUN apt-get update -y && rosdep update && \
 RUN python3 -m pip install --upgrade cython
 
 ## Build the dependencies and the ZED ROS2 Wrapper
-RUN /bin/sh -c ". /opt/ros/$ROS_DISTRO/install/setup.sh && \
+RUN /bin/sh -c ". /opt/ros/$ROS_DISTRO/share/nmea_msgs/local_setup.sh && . /opt/ros/$ROS_DISTRO/install/setup.sh && \
   colcon build --parallel-workers $(nproc) --symlink-install \
   --event-handlers console_direct+ --base-paths src \
   --cmake-args '-DCMAKE_BUILD_TYPE=Release' '-DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' '-DCMAKE_CXX_FLAGS=\"-Wl,--allow-shlib-undefined\"'"
