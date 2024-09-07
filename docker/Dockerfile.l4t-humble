@@ -40,7 +40,7 @@ RUN apt update && apt install -y --no-install-recommends \
 RUN pip3 install protobuf
 
 # Copy the sources in the Docker image
-WORKDIR /root/ros2_ws
+WORKDIR /root/ros2_ws/
 COPY tmp_sources/ ./src/
 
 # TODO this may cause serious issues. overwrite the opencv-dev package, which
@@ -68,7 +68,7 @@ RUN /bin/sh -c ". /opt/ros/$ROS_DISTRO/share/nmea_msgs/local_setup.sh && . /opt/
 # Set the default DDS middleware to FastRTPS for improved big data transmission
 ENV RMW_IMPLEMENTATION rmw_fastrtps_cpp
 
-# Setup environment variables 
-COPY ros_entrypoint_jetson.sh /sbin/ros_entrypoint.sh
+# Setup environment variables
+COPY ros_entrypoint.sh /sbin/ros_entrypoint.sh
 ENTRYPOINT ["/sbin/ros_entrypoint.sh"]
 CMD ["bash"]
