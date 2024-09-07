@@ -39,7 +39,6 @@ RUN apt-get update && apt-get install -y \
   lsb-release \
   python3-pip \
   software-properties-common \
-  sudo \
   udev \
   usbutils \
   wget \
@@ -105,7 +104,5 @@ ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
 # Setup environment variables
 COPY ros_entrypoint.sh /sbin/ros_entrypoint.sh
-RUN sudo chmod 755 /sbin/ros_entrypoint.sh
-
 ENTRYPOINT ["/sbin/ros_entrypoint.sh"]
 CMD ["bash"]
