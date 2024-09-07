@@ -22,15 +22,43 @@ ARG ZED_SDK_PATCH=0
 
 ARG ROS2_DIST=humble       # ROS2 distribution
 
-ARG DEBIAN_FRONTEND=noninteractive
-
 ENV NVIDIA_DRIVER_CAPABILITIES \
     ${NVIDIA_DRIVER_CAPABILITIES:+$NVIDIA_DRIVER_CAPABILITIES,}compute,video,utility
 
-RUN apt update && apt install -y zstd curl software-properties-common python3-pip
+ENV DEBIAN_FRONTEND=noninteractive
+
+########### ROS2 ###########
+
+ENV ROS_DISTRO=${ROS2_DIST}
+# Install Dependencies for the ROS installation
+RUN apt update && apt install -y --no-install-recommends \
+    software-properties-common \
+    curl
+
+# Setup Sources
+RUN add-apt-repository universe && \
+  curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+# Install ROS 2 Development and Base packages
+RUN apt update && apt install --no-install-recommends -y \
+    ros-dev-tools \
+    ros-humble-ros-core
+
+# Initialize rosdep
+RUN . /opt/ros/$ROS_DISTRO/setup.sh && rosdep init && rosdep update
+
+########### ZED ###########
+
+# Install Dependencies for the SDK installation
+RUN apt update && apt install -y --no-install-recommends \
+    curl \
+    python3-pip \
+    wget \
+    zstd
 
 # ZED SDK link
-ENV ZED_SDK_URL "https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}/ZED_SDK_Ubuntu${UBUNTU_MAJOR}_cuda${CUDA_MAJOR}.${CUDA_MINOR}_v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}.zstd.run"
+ENV ZED_SDK_URL="https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}/ZED_SDK_Ubuntu${UBUNTU_MAJOR}_cuda${CUDA_MAJOR}.${CUDA_MINOR}_v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}.zstd.run"
 
 # Check that this SDK exists
 RUN echo "SDK link: $ZED_SDK_URL"
@@ -41,56 +69,46 @@ RUN if [ "$(curl -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | head 
         exit 1; \
     fi
 
-############ Install ROS2 ############
-
-# Setup Sources
-RUN add-apt-repository universe && \
-  curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
-
-# Install ROS 2 Base packages
-RUN apt update && apt install --no-install-recommends -y \
-    ros-dev-tools \
-    ros-humble-ros-core
-
-# Install the ZED ROS2 Wrapper
-ENV ROS_DISTRO ${ROS2_DIST}
 # Install the ZED SDK
 RUN echo "CUDA Version $CUDA_VERSION" > /usr/local/cuda/version.txt
 
-# Setup the ZED SDK
-RUN python3 -m pip install opencv-python-headless && \
-  wget -q -O ZED_SDK_Linux_Ubuntu.run ${ZED_SDK_URL} && \
-  chmod +x ZED_SDK_Linux_Ubuntu.run && \
-  ./ZED_SDK_Linux_Ubuntu.run -- silent skip_tools skip_cuda && \
+ENV ZED_RUN_FILE="ZED_SDK_Linux_Ubuntu.run"
+RUN wget -q -O ${ZED_RUN_FILE} ${ZED_SDK_URL} && \
+  chmod +x ${ZED_RUN_FILE} && \
+  ./${ZED_RUN_FILE} -- silent skip_tools skip_cuda && \
   ln -sf /lib/x86_64-linux-gnu/libusb-1.0.so.0 /usr/lib/x86_64-linux-gnu/libusb-1.0.so && \
-  rm ZED_SDK_Linux_Ubuntu.run
+  rm -rf /usr/local/zed/resources/* && \
+  rm -rf ${ZED_RUN_FILE}
 
-# Install extra dependencies. Needed?
-RUN apt update && apt install -y \
+# Install extra dependencies.
+RUN apt update && apt install -y --no-install-recommends \
   libopencv-dev \
   libpng-dev \
   libpq-dev \
   usbutils
 
+RUN pip3 install opencv-python-headless
+
+########### COLCON BUILD ZED WRAPPER ###########
+
 # Copy the sources in the Docker image
 WORKDIR /root/ros2_ws/
 COPY tmp_sources/ ./src/
 
-# Initialize rosdep
-RUN . /opt/ros/$ROS_DISTRO/setup.sh && rosdep init && rosdep update
-RUN apt update -y && /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && \
-  rosdep update && \
+# Install ROS dependencies
+RUN apt update -y && rosdep update && \
   rosdep install --from-paths src --ignore-src -r -y && \
+  rm -rf /var/lib/apt/lists/*
+
+RUN /bin/sh -c ". /opt/ros/$ROS_DISTRO/setup.sh && \
   colcon build --parallel-workers $(nproc) --symlink-install \
   --event-handlers console_direct+ --base-paths src \
   --cmake-args '-DCMAKE_BUILD_TYPE=Release' \
   '-DCMAKE_LIBRARY_PATH=/usr/local/cuda/lib64/stubs' \
-  '-DCMAKE_CXX_FLAGS=\"-Wl,--allow-shlib-undefined\"'" \
-  && rm -rf /var/lib/apt/lists/*
+  '-DCMAKE_CXX_FLAGS=\"-Wl,--allow-shlib-undefined\"'"
 
 # Set the default DDS middleware to FastRTPS for improved big data transmission
-ENV RMW_IMPLEMENTATION rmw_fastrtps_cpp
+ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
 # Setup environment variables
 COPY ros_entrypoint.sh /sbin/ros_entrypoint.sh
