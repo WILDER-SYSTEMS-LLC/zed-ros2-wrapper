@@ -1,18 +1,18 @@
-ARG L4T_VERSION l4t-r36.2.0
-ARG IMAGE_NAME dustynv/ros:humble-ros-base-${L4T_VERSION}
+ARG L4T_VERSION=l4t-r36.2.0
+ARG IMAGE_NAME=dustynv/ros:humble-ros-base-${L4T_VERSION}
 
 FROM ${IMAGE_NAME}
 
-ARG ZED_SDK_MAJOR 4
-ARG ZED_SDK_MINOR 1
-ARG ZED_SDK_PATCH 0
-ARG L4T_MAJOR 36
-ARG L4T_MINOR 2
+ARG ZED_SDK_MAJOR=4
+ARG ZED_SDK_MINOR=1
+ARG ZED_SDK_PATCH=0
+ARG L4T_MAJOR=36
+ARG L4T_MINOR=2
 
 ENV DEBIAN_FRONTEND noninteractive
 
 # ZED SDK link
-ENV ZED_SDK_URL="https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}/ZED_SDK_Tegra_L4T${L4T_MAJOR}.${L4T_MINOR}_v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}.zstd.run"
+ENV ZED_SDK_URL "https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}/ZED_SDK_Tegra_L4T${L4T_MAJOR}.${L4T_MINOR}_v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}.zstd.run"
 
 # Check that this SDK exists
 RUN if [ "$(curl -I "${ZED_SDK_URL}" -o /dev/null -s -w '%{http_code}\n' | head -n 1)" = "200" ]; then \
@@ -39,25 +39,25 @@ RUN apt update && apt install -y --no-install-recommends \
     usbutils
 RUN pip3 install protobuf
 
-WORKDIR /root/ros2_ws
 # Copy the sources in the Docker image
+WORKDIR /root/ros2_ws
 COPY tmp_sources/ ./src/
 
 # TODO this may cause serious issues. overwrite the opencv-dev package, which
 # is labeled as dirty, and comes from who knows where ... ?
-RUN apt-get -o Dpkg::Options::="--force-overwrite" install -f -y libopencv-dev
+RUN apt -o Dpkg::Options::="--force-overwrite" install -f -y libopencv-dev
 
 # Add missing packages which weren't resolved by rosdep
-RUN apt-get install -y ros-humble-nmea-msgs
-RUN apt-get update -y && rosdep update && \
+RUN apt install -y ros-humble-nmea-msgs
+RUN apt update -y && rosdep update && \
   rosdep install --from-paths src --ignore-src -r -y && \
   rm -rf /var/lib/apt/lists/*
 
 # Install cython
 RUN python3 -m pip install --upgrade cython
 
-#TODO nmea_msgs package is borked
-## Build the dependencies and the ZED ROS2 Wrapper
+# TODO nmea_msgs package is borked
+# Build the dependencies and the ZED ROS2 Wrapper
 RUN /bin/sh -c ". /opt/ros/$ROS_DISTRO/share/nmea_msgs/local_setup.sh && . /opt/ros/$ROS_DISTRO/install/setup.sh && \
   colcon build --parallel-workers $(nproc) --symlink-install \
   --event-handlers console_direct+ --base-paths src \
@@ -66,7 +66,7 @@ RUN /bin/sh -c ". /opt/ros/$ROS_DISTRO/share/nmea_msgs/local_setup.sh && . /opt/
   '-DCMAKE_CXX_FLAGS=\"-Wl,--allow-shlib-undefined\"'"
 
 # Set the default DDS middleware to FastRTPS for improved big data transmission
-ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+ENV RMW_IMPLEMENTATION rmw_fastrtps_cpp
 
 # Setup environment variables 
 COPY ros_entrypoint_jetson.sh /sbin/ros_entrypoint.sh

@@ -27,22 +27,11 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV NVIDIA_DRIVER_CAPABILITIES \
     ${NVIDIA_DRIVER_CAPABILITIES:+$NVIDIA_DRIVER_CAPABILITIES,}compute,video,utility
 
-# ZED SDK link
-ENV ZED_SDK_URL="https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}/ZED_SDK_Ubuntu${UBUNTU_MAJOR}_cuda${CUDA_MAJOR}.${CUDA_MINOR}_v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}.zstd.run"
+RUN apt update && apt install -y zstd curl software-properties-common python3-pip
 
-RUN apt-get update && apt-get install -y \
-  curl \
-  libgomp1 \
-  libopencv-dev \
-  libpng-dev \
-  libpq-dev \
-  lsb-release \
-  python3-pip \
-  software-properties-common \
-  udev \
-  usbutils \
-  wget \
-  zstd
+# ZED SDK link
+ENV ZED_SDK_URL "https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}/ZED_SDK_Ubuntu${UBUNTU_MAJOR}_cuda${CUDA_MAJOR}.${CUDA_MINOR}_v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}.zstd.run"
+
 
 # Check that this SDK exists
 RUN echo "SDK link: $ZED_SDK_URL"
@@ -60,10 +49,8 @@ RUN add-apt-repository universe && \
   curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg && \
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
 
-# Install ROS 2 Base packages
-RUN apt-get update && apt-get install --no-install-recommends -y \
-  ros-dev-tools \
-  ros-${ROS2_DIST}-ros-core
+# Install ROS 2 Development packages
+RUN apt update && apt install --no-install-recommends -y ros-dev-tools ros-humble-ros-core
 
 # Install the ZED ROS2 Wrapper
 ENV ROS_DISTRO ${ROS2_DIST}
@@ -78,16 +65,21 @@ RUN python3 -m pip install numpy opencv-python-headless && \
   ln -sf /lib/x86_64-linux-gnu/libusb-1.0.so.0 /usr/lib/x86_64-linux-gnu/libusb-1.0.so && \
   rm ZED_SDK_Linux_Ubuntu.run
 
-# Copy the sources in the Docker image
-WORKDIR /root/ros2_ws/src
-COPY tmp_sources/ ./
+# Install extra dependencies. Needed?
+RUN apt update && apt install -y \
+  libgomp1 \
+  libopencv-dev \
+  libpng-dev \
+  libpq-dev \
+  usbutils
 
-# RUN ls -lah /root/ros2_ws/src/
+# Copy the sources in the Docker image
 WORKDIR /root/ros2_ws/
+COPY tmp_sources/ ./src/
 
 # Initialize rosdep
 RUN . /opt/ros/$ROS_DISTRO/setup.sh && rosdep init && rosdep update
-RUN apt-get update -y && /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && \
+RUN apt update -y && /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && \
   rosdep update && \
   rosdep install --from-paths src --ignore-src -r -y && \
   colcon build --parallel-workers $(nproc) --symlink-install \
@@ -100,7 +92,7 @@ RUN apt-get update -y && /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash &&
 WORKDIR /root/ros2_ws
 
 # Set the default DDS middleware to FastRTPS for improved big data transmission
-ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+ENV RMW_IMPLEMENTATION rmw_fastrtps_cpp
 
 # Setup environment variables
 COPY ros_entrypoint.sh /sbin/ros_entrypoint.sh
