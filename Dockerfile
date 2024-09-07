@@ -4,8 +4,9 @@ FROM ${IMAGE_NAME}
 ARG UBUNTU_MAJOR=22
 #ARG UBUNTU_MINOR=04
 ARG CUDA_MAJOR=12
-ARG CUDA_MINOR=4
-#ARG CUDA_PATCH=1
+ARG CUDA_MINOR=1
+#ARG CUDA_PATCH=0
+
 ARG ZED_SDK_MAJOR=4
 ARG ZED_SDK_MINOR=1
 ARG ZED_SDK_PATCH=0
@@ -33,27 +34,25 @@ RUN . /opt/ros/$ROS_DISTRO/setup.sh && rosdep init && rosdep update
 
 # Install Dependencies for the SDK installation
 RUN apt update && apt install -y zstd
-
 ENV ZED_SDK_URL="https://stereolabs.sfo2.cdn.digitaloceanspaces.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}/ZED_SDK_Ubuntu${UBUNTU_MAJOR}_cuda${CUDA_MAJOR}.${CUDA_MINOR}_v${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}.${ZED_SDK_PATCH}.zstd.run"
 
 # Install the ZED SDK
-RUN echo "CUDA Version $CUDA_VERSION" > /usr/local/cuda/version.txt
-RUN wget -q -O zed.run ${ZED_SDK_URL}
-  #chmod +x zed.run && \
-  #./zed.run -- silent skip_tools skip_cuda && \
-  #ln -sf /lib/x86_64-linux-gnu/libusb-1.0.so.0 /usr/lib/x86_64-linux-gnu/libusb-1.0.so && \
-  #rm -rf /usr/local/zed/resources/* zed.run
+RUN wget -q -O zed.run ${ZED_SDK_URL} && \
+  chmod +x zed.run && \
+  ./zed.run -- silent skip_tools skip_cuda && \
+  ln -sf /lib/x86_64-linux-gnu/libusb-1.0.so.0 /usr/lib/x86_64-linux-gnu/libusb-1.0.so && \
+  rm -rf /usr/local/zed/resources/* zed.run
 
 # Install extra dependencies. TODO remove these
-RUN apt update && apt install -y --no-install-recommends \
-    libpq-dev \
-    usbutils
+#RUN apt update && apt install -y --no-install-recommends \
+#    libpq-dev \
+#    usbutils
 #RUN pip3 install opencv-python-headless protobuf
 
 ########### COLCON BUILD ZED WRAPPER ###########
 
 WORKDIR /root/ros2_ws/
-ADD . ./src/
+ADD . .
 
 # Install ROS dependencies
 RUN apt update -y && rosdep update && \
