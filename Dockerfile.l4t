@@ -8,7 +8,6 @@ ARG ZED_SDK_MAJOR=4
 ARG ZED_SDK_MINOR=1
 ARG ZED_SDK_PATCH=0
 
-
 ENV DEBIAN_FRONTEND=noninteractive
 
 ########### ROS2 ###########
@@ -38,9 +37,7 @@ RUN wget -q -O zed.run ${ZED_SDK_URL} && \
   rm -rf /usr/local/zed/resources/* zed.run
 
 # Install extra dependencies. TODO remove these
-#RUN apt update && apt install -y --no-install-recommends \
-#    libpq-dev \
-#    usbutils
+#RUN apt update && apt install -y libpq-dev usbutils
 #RUN pip3 install opencv-python-headless protobuf
 
 ########### COLCON BUILD ZED WRAPPER ###########
